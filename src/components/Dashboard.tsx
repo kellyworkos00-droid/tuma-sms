@@ -14,6 +14,7 @@ import {
   MAX_ROWS,
   normalizePhone,
   parseCsv,
+  parseTyped,
   renderMessage,
   toCsv,
   unknownFields,
@@ -113,8 +114,10 @@ export function Dashboard({ mode, sender }: { mode: Mode; sender: string | null 
 
 function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string | null; optOuts: string[]; onDone: (campaign: Campaign) => void }) {
   const [fileName, setFileName] = useState('');
-  const [sheet, setSheet] = useState<ParsedSheet | null>(null);
-  const [phoneColumn, setPhoneColumn] = useState(0);
+  const [source, setSource] = useState<'file' | 'typed'>('file');
+  const [typed, setTyped] = useState('');
+  const [uploaded, setUploaded] = useState<ParsedSheet | null>(null);
+  const [uploadedColumn, setUploadedColumn] = useState(0);
   const [fileError, setFileError] = useState('');
   const [dragging, setDragging] = useState(false);
   const [template, setTemplate] = useState('');
@@ -133,6 +136,9 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
     setPrice(read<string>(PRICE_KEY, ''));
     setStopLine(read<string>(OPTOUT_LINE_KEY, 'Reply STOP to opt out.'));
   }, []);
+
+  const sheet = useMemo(() => (source === 'file' ? uploaded : typed.trim() ? parseTyped(typed) : null), [source, typed, uploaded]);
+  const phoneColumn = source === 'file' ? uploadedColumn : 0;
 
   const optOutSet = useMemo(() => new Set(optOuts), [optOuts]);
   const list = useMemo(() => (sheet ? cleanList(sheet, phoneColumn, optOutSet) : null), [sheet, phoneColumn, optOutSet]);
@@ -177,8 +183,8 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
     const parsed = parseCsv(await file.text());
     if (!parsed.rows.length) { setFileError('We could not find any rows in that file.'); return; }
     if (parsed.rows.length > MAX_ROWS) { setFileError(`That list has ${parsed.rows.length.toLocaleString()} rows. The limit is ${MAX_ROWS.toLocaleString()} at a time.`); return; }
-    setSheet(parsed);
-    setPhoneColumn(guessPhoneColumn(parsed));
+    setUploaded(parsed);
+    setUploadedColumn(guessPhoneColumn(parsed));
     setFileName(file.name);
     setConsent(false);
   };
@@ -234,7 +240,7 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
     const campaign: Campaign = {
       id: crypto.randomUUID(),
       at: new Date().toISOString(),
-      file: fileName,
+      file: source === 'file' ? fileName : 'Typed numbers',
       message: template,
       total: items.length,
       sent: results.filter((r) => r.status === 'sent').length,
@@ -303,12 +309,26 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
           <header className="panel-head"><span className="step-dot">1</span><h2>Your customers</h2></header>
           {fileError ? <p className="alert alert-bad" role="alert">{fileError}</p> : null}
 
-          {!sheet ? (
-            <label className={`drop${dragging ? ' is-over' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={drop}>
-              <strong>Drop your CSV here, or tap to choose</strong>
-              <span>A phone column is all you need. Names and other columns can go into your message.</span>
-              <input type="file" accept=".csv,.txt,text/csv" className="visually-hidden" onChange={(event) => { void loadFile(event.target.files?.[0]); event.target.value = ''; }} />
+          <div className="source-switch" role="group" aria-label="How to add numbers">
+            {([['file', 'Upload CSV'], ['typed', 'Type numbers']] as const).map(([key, label]) => (
+              <button type="button" key={key} className={source === key ? 'is-on' : ''} aria-pressed={source === key} onClick={() => { setSource(key); setConsent(false); setFileError(''); }}>{label}</button>
+            ))}
+          </div>
+
+          {source === 'typed' ? (
+            <label className="field"><span>Phone numbers</span>
+              <textarea rows={6} value={typed} placeholder={'0712 345 678, Amina\n0733 000 111, Brian\n0722 000 222'} onChange={(event) => { setTyped(event.target.value); setConsent(false); }} />
+              <small className="field-hint">One on each line. Add a comma and a name to use {'{name}'} in your message.</small>
             </label>
+          ) : !uploaded ? (
+            <>
+              <label className={`drop${dragging ? ' is-over' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={drop}>
+                <strong>Drop your CSV here, or tap to choose</strong>
+                <span>A phone column is all you need. Names and other columns can go into your message.</span>
+                <input type="file" accept=".csv,.txt,text/csv" className="visually-hidden" onChange={(event) => { void loadFile(event.target.files?.[0]); event.target.value = ''; }} />
+              </label>
+              <button type="button" className="link-btn sample-link" onClick={() => download('sample-customers.csv', [['name', 'phone', 'balance'], ['Amina', '0712 345 678', '1200'], ['Brian', '+254 733 000 111', '450']])}>Download a sample CSV</button>
+            </>
           ) : (
             <>
               <div className="file-row">
@@ -318,30 +338,28 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
                 </label>
               </div>
               <label className="field"><span>Which column has the phone numbers?</span>
-                <select value={phoneColumn} onChange={(event) => setPhoneColumn(Number(event.target.value))}>
-                  {sheet.headers.map((header, i) => <option value={i} key={`${header}-${i}`}>{header}{sheet.rows[0]?.[i] ? ` (e.g. ${sheet.rows[0][i]})` : ''}</option>)}
+                <select value={uploadedColumn} onChange={(event) => setUploadedColumn(Number(event.target.value))}>
+                  {uploaded.headers.map((header, i) => <option value={i} key={`${header}-${i}`}>{header}{uploaded.rows[0]?.[i] ? ` (e.g. ${uploaded.rows[0][i]})` : ''}</option>)}
                 </select>
               </label>
-              {list ? (
-                <>
-                  <ul className="stats">
-                    <li className="is-good"><strong>{list.contacts.length.toLocaleString()}</strong><span>Ready to send</span></li>
-                    <li><strong>{list.duplicates.toLocaleString()}</strong><span>Duplicates removed</span></li>
-                    <li><strong>{list.rejected.length.toLocaleString()}</strong><span>Not valid</span></li>
-                    <li><strong>{list.optedOut.toLocaleString()}</strong><span>Opted out</span></li>
-                  </ul>
-                  {list.rejected.length ? (
-                    <div className="note-row">
-                      <span>First problem: line {list.rejected[0].line}. {list.rejected[0].reason}.</span>
-                      <button type="button" className="link-btn" onClick={() => download('numbers-not-valid.csv', [['line', 'value', 'reason'], ...list.rejected.map((r) => [String(r.line), r.value, r.reason])])}>Download all</button>
-                    </div>
-                  ) : null}
-                </>
-              ) : null}
             </>
           )}
-          {!sheet ? (
-            <button type="button" className="link-btn sample-link" onClick={() => download('sample-customers.csv', [['name', 'phone', 'balance'], ['Amina', '0712 345 678', '1200'], ['Brian', '+254 733 000 111', '450']])}>Download a sample CSV</button>
+
+          {list ? (
+            <>
+              <ul className="stats">
+                <li className="is-good"><strong>{list.contacts.length.toLocaleString()}</strong><span>Ready to send</span></li>
+                <li><strong>{list.duplicates.toLocaleString()}</strong><span>Duplicates removed</span></li>
+                <li><strong>{list.rejected.length.toLocaleString()}</strong><span>Not valid</span></li>
+                <li><strong>{list.optedOut.toLocaleString()}</strong><span>Opted out</span></li>
+              </ul>
+              {list.rejected.length ? (
+                <div className="note-row">
+                  <span>First problem: line {list.rejected[0].line}. {list.rejected[0].reason}.</span>
+                  <button type="button" className="link-btn" onClick={() => download('numbers-not-valid.csv', [['line', 'value', 'reason'], ...list.rejected.map((r) => [String(r.line), r.value, r.reason])])}>Download all</button>
+                </div>
+              ) : null}
+            </>
           ) : null}
         </section>
 

@@ -61,6 +61,21 @@ export function parseCsv(text: string): ParsedSheet {
   return { headers, rows: hadHeader ? filled.slice(1) : filled, hadHeader };
 }
 
+/**
+ * Numbers typed or pasted by hand. Each line can be a number, a number then a name,
+ * or several numbers separated by commas or semicolons.
+ */
+export function parseTyped(text: string): ParsedSheet {
+  const rows: string[][] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const parts = line.split(/[,;\t]/).map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) continue;
+    if (parts.length > 1 && parts.every((part) => normalizePhone(part))) parts.forEach((part) => rows.push([part, '']));
+    else rows.push([parts[0], parts.slice(1).join(' ')]);
+  }
+  return { headers: ['phone', 'name'], rows, hadHeader: false };
+}
+
 /** The column most likely to hold numbers: the header says so, or the values look like phones. */
 export function guessPhoneColumn(sheet: ParsedSheet): number {
   const byName = sheet.headers.findIndex((h) => /phone|mobile|msisdn|simu|number|contact|tel/i.test(h));
