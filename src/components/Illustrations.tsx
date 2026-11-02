@@ -139,7 +139,7 @@ export function StepWrite() {
       <path d="M70 145l-6 25 28-24" fill="#fff" stroke={INK} strokeWidth="2.500" strokeLinejoin="round" />
       <path d="M71 143h20" stroke="#fff" strokeWidth="4" />
       <text className="svg-d" x="60" y="76" fontSize="21" fontWeight="700" fill={INK}>Hi</text>
-      <rect x="88" y="54" width="84" height="30" rx="9" fill={BLUE} />
+      <rect className="art-pulse" x="88" y="54" width="84" height="30" rx="9" fill={BLUE} />
       <text className="svg-d" x="130" y="75" textAnchor="middle" fontSize="17" fontWeight="700" fill="#fff">{'{name}'}</text>
       <text className="svg-t" x="60" y="112" fontSize="14" fill={INK}>your order is ready.</text>
       <g className="float-b">
@@ -158,9 +158,9 @@ export function StepSend() {
         <path d="M112 96 288 28l-56 138-40-48Z" fill="#fff" stroke={INK} strokeWidth="2.500" strokeLinejoin="round" />
         <path d="m192 118 96-90-86 118Z" fill={BLUE} stroke={INK} strokeWidth="2.500" strokeLinejoin="round" />
       </g>
-      <Tick x={60} y={66} r={17} />
-      <Tick x={118} y={38} r={12} />
-      <Tick x={258} y={166} r={13} />
+      <g className="art-pop" style={{ animationDelay: '0.45s' }}><Tick x={60} y={66} r={17} /></g>
+      <g className="art-pop" style={{ animationDelay: '0.7s' }}><Tick x={118} y={38} r={12} /></g>
+      <g className="art-pop" style={{ animationDelay: '0.95s' }}><Tick x={258} y={166} r={13} /></g>
     </svg>
   );
 }
@@ -202,7 +202,7 @@ export function ConsentIllustration() {
         <tspan x="54" y="78">Hi Amina, our offer starts</tspan>
         <tspan x="54" y="100">on Friday.</tspan>
       </text>
-      <rect x="54" y="110" width="164" height="24" rx="12" fill={SUN} />
+      <rect className="art-pulse" x="54" y="110" width="164" height="24" rx="12" fill={SUN} />
       <text className="svg-t" x="136" y="127" textAnchor="middle" fontSize="13" fontWeight="600" fill={INK}>Reply STOP to opt out</text>
 
       <rect x="176" y="172" width="250" height="100" rx="18" fill="#fff" stroke={INK} strokeWidth="2.500" />
@@ -210,7 +210,7 @@ export function ConsentIllustration() {
       {['0733 000 111', '0722 000 222'].map((number, i) => (
         <g key={number}>
           <text className="svg-t" x="196" y={228 + i * 26} fontSize="14" fill={SOFT}>{number}</text>
-          <text className="svg-t" x="406" y={228 + i * 26} textAnchor="end" fontSize="13" fontWeight="600" fill="#a42b12">Skipped</text>
+          <text className="svg-t art-pop" style={{ animationDelay: `${0.5 + i * 0.35}s` }} x="406" y={228 + i * 26} textAnchor="end" fontSize="13" fontWeight="600" fill="#a42b12">Skipped</text>
         </g>
       ))}
 
@@ -262,13 +262,13 @@ export function RetryIcon() {
 export function CtaIllustration() {
   return (
     <svg className="illo" viewBox="0 0 420 260" aria-hidden="true">
-      <path className="flow" d="M18 214c62 22 124-4 170-66" fill="none" stroke="#fff" strokeWidth="3" strokeDasharray="2 11" strokeLinecap="round" />
+      <path className="flow" d="M18 214c62 22 124-4 170-66" fill="none" stroke={INK} strokeWidth="3" strokeDasharray="2 11" strokeLinecap="round" />
       <g className="float-a">
         <path d="M168 134 400 28l-72 192-58-66Z" fill="#fff" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-        <path d="m270 154 130-126-116 166Z" fill={SUN} stroke={INK} strokeWidth="3" strokeLinejoin="round" />
+        <path d="m270 154 130-126-116 166Z" fill={BLUE} stroke={INK} strokeWidth="3" strokeLinejoin="round" />
       </g>
-      <Tick x={66} y={118} r={20} />
-      <Tick x={134} y={54} r={14} />
+      <g className="art-pop" style={{ animationDelay: '0.3s' }}><Tick x={66} y={118} r={20} /></g>
+      <g className="art-pop" style={{ animationDelay: '0.6s' }}><Tick x={134} y={54} r={14} /></g>
     </svg>
   );
 }

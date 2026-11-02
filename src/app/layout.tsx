@@ -18,7 +18,10 @@ export const viewport: Viewport = { themeColor: '#ffffff' };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${text.variable}`}>
+    <html lang="en" id="top" className={`${display.variable} ${text.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: "(function(){var r=document.documentElement;if(!matchMedia('(prefers-reduced-motion: reduce)').matches){r.classList.add('fx');setTimeout(function(){if(!r.dataset.fxReady)r.classList.remove('fx')},3000)}})()" }} />
+      </head>
       <body>{children}</body>
     </html>
   );
