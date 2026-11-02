@@ -15,6 +15,7 @@ import {
   normalizePhone,
   parseCsv,
   parseTyped,
+  plainText,
   renderMessage,
   toCsv,
   unknownFields,
@@ -32,6 +33,13 @@ const OPTOUT_KEY = 'tuma_optouts_v1';
 const PRICE_KEY = 'tuma_price_v1';
 const OPTOUT_LINE_KEY = 'tuma_optout_line_v1';
 const BATCH = 100;
+
+const STARTERS = [
+  { label: 'Offer', text: 'Hi {name}, our offer starts this Friday. Visit us and save.' },
+  { label: 'Reminder', text: 'Hi {name}, this is a reminder that your payment is due this week. Thank you.' },
+  { label: 'Thank you', text: 'Hi {name}, thank you for choosing us. We appreciate you.' },
+  { label: 'Update', text: 'Hi {name}, we have an update for you: ' },
+];
 
 const read = <T,>(key: string, fallback: T): T => {
   try {
@@ -125,6 +133,7 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
   const [stopLine, setStopLine] = useState('Reply STOP to opt out.');
   const [price, setPrice] = useState('');
   const [consent, setConsent] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [outcome, setOutcome] = useState<Campaign | null>(null);
@@ -144,15 +153,17 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
   const list = useMemo(() => (sheet ? cleanList(sheet, phoneColumn, optOutSet) : null), [sheet, phoneColumn, optOutSet]);
   const fieldKeys = useMemo(() => (sheet ? sheet.headers.map(fieldKey).filter((key, i) => i !== phoneColumn && key && !/^column_\d+$/.test(key)) : []), [sheet, phoneColumn]);
   const known = useMemo(() => (sheet ? sheet.headers.map(fieldKey) : []), [sheet]);
-  const missing = useMemo(() => unknownFields(template, known), [template, known]);
+  const missing = useMemo(() => (sheet ? unknownFields(template, known) : []), [sheet, template, known]);
 
   const compose = useCallback((fields: Record<string, string>) => {
     const body = renderMessage(template, fields);
     return addStop && stopLine.trim() ? `${body} ${stopLine.trim()}`.trim() : body;
   }, [addStop, stopLine, template]);
 
-  const first = list?.contacts[0];
-  const previewText = first ? compose(first.fields) : compose({});
+  const contactCount = list?.contacts.length ?? 0;
+  const shownIndex = contactCount ? Math.min(previewIndex, contactCount - 1) : 0;
+  const shown = list?.contacts[shownIndex];
+  const previewText = shown ? compose(shown.fields) : compose({});
 
   /** The longest personalised message decides the warning, and the real total is added up per person. */
   const totals = useMemo(() => {
@@ -365,26 +376,57 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
 
         <section className="panel">
           <header className="panel-head"><span className="step-dot">2</span><h2>Your message</h2></header>
-          <label className="field"><span className="visually-hidden">Message</span>
-            <textarea ref={box} rows={5} value={template} placeholder="Hi {name}, our December offer starts on Friday…" onChange={(event) => setTemplate(event.target.value)} />
-          </label>
-          {fieldKeys.length ? (
-            <div className="tokens" aria-label="Insert a column">
-              <span>Insert:</span>
-              {fieldKeys.map((key) => <button type="button" key={key} onClick={() => insertField(key)}>{`{${key}}`}</button>)}
+          {!template.trim() ? (
+            <div className="starters">
+              <span>Start from</span>
+              {STARTERS.map((starter) => (
+                <button type="button" key={starter.label} onClick={() => { setTemplate(starter.text); box.current?.focus(); }}>{starter.label}</button>
+              ))}
             </div>
           ) : null}
-          {missing.length ? <p className="alert alert-bad" role="alert">Your list has no column called {missing.map((m) => `{${m}}`).join(', ')}. Fix it, or customers would see those brackets.</p> : null}
-          <label className="check"><input type="checkbox" checked={addStop} onChange={(event) => setAddStop(event.target.checked)} /><span>Add an opt-out line to every message</span></label>
-          {addStop ? (
-            <label className="field"><span>Opt-out line</span>
-              <input value={stopLine} onChange={(event) => setStopLine(event.target.value)} />
+
+          <div className="composer">
+            {fieldKeys.length ? (
+              <div className="tokens composer-tokens" aria-label="Insert a detail from your list">
+                <span>Personalise</span>
+                {fieldKeys.map((key) => <button type="button" key={key} onClick={() => insertField(key)}>{`{${key}}`}</button>)}
+              </div>
+            ) : null}
+            <label>
+              <span className="visually-hidden">Message</span>
+              <textarea className="composer-input" ref={box} rows={5} value={template} placeholder="Hi {name}, write your message here…" onChange={(event) => setTemplate(event.target.value)} />
             </label>
-          ) : <p className="alert alert-warn">Marketing messages should always include a way to opt out.</p>}
-          <div className={`counter${totals.worst.encoding === 'Unicode' ? ' is-warn' : ''}`}>
-            <span>{totals.worst.length} characters · {totals.worst.segments} SMS per person{sheet ? ' at most' : ''}</span>
-            {totals.worst.culprits.length ? <span>Special characters ({totals.worst.culprits.slice(0, 6).join(' ')}) cut each SMS to {totals.worst.perSegment} characters and raise the cost.</span> : null}
+            <div className={`composer-optout${addStop ? '' : ' is-off'}`}>
+              <label className="switch">
+                <input type="checkbox" checked={addStop} aria-label="Add an opt-out line to every message" onChange={(event) => setAddStop(event.target.checked)} />
+                <span aria-hidden="true" />
+              </label>
+              {addStop
+                ? <input className="composer-optout-text" aria-label="Opt-out line" value={stopLine} onChange={(event) => setStopLine(event.target.value)} />
+                : <span className="composer-optout-note">No opt-out line</span>}
+            </div>
+            <div className="composer-foot">
+              <div className="meter" role="img" aria-label={`${totals.worst.segments} SMS per person`}>
+                <span className={totals.worst.segments > 1 || totals.worst.encoding === 'Unicode' ? 'is-warn' : ''} style={{ width: `${totals.worst.segments ? Math.min(100, (1 - (totals.worst.segments * totals.worst.perSegment - totals.worst.length) / totals.worst.perSegment) * 100) : 0}%` }} />
+              </div>
+              <div className="meter-text">
+                <span><b>{totals.worst.segments}</b> SMS {sheet ? 'at most per person' : 'per person'}</span>
+                <span>{totals.worst.length} characters{totals.worst.segments ? ` · ${totals.worst.segments * totals.worst.perSegment - totals.worst.length} left in this SMS` : ''}</span>
+              </div>
+            </div>
           </div>
+
+          {missing.length ? <p className="alert alert-bad composer-alert" role="alert">Your list has no column called {missing.map((m) => `{${m}}`).join(', ')}. Fix it, or customers would see those brackets.</p> : null}
+          {!addStop ? <p className="alert alert-warn composer-alert">Marketing messages should always include a way to opt out.</p> : null}
+          {totals.worst.segments > 1 && !totals.worst.culprits.length ? <p className="alert alert-warn composer-alert">This message costs {totals.worst.segments} SMS for each person. Shorten it to pay for fewer.</p> : null}
+          {totals.worst.culprits.length ? (
+            <div className="alert alert-warn composer-alert composer-fix">
+              <span>Special characters ({totals.worst.culprits.slice(0, 6).join(' ')}) cut each SMS to {totals.worst.perSegment} characters and raise the cost.</span>
+              {plainText(template) !== template || plainText(stopLine) !== stopLine
+                ? <button type="button" className="link-btn" onClick={() => { setTemplate(plainText(template)); setStopLine(plainText(stopLine)); }}>Fix quotes and dashes</button>
+                : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="panel">
@@ -407,10 +449,21 @@ function SendTab({ mode, sender, optOuts, onDone }: { mode: Mode; sender: string
       <aside className="preview" aria-label="Message preview">
         <div className="phone">
           <div className="phone-notch" />
-          <p className="phone-from">{sender ?? BRAND.name}</p>
-          {previewText ? <p className="phone-bubble">{previewText}</p> : <p className="phone-empty">Your message will appear here.</p>}
+          <div className="phone-head">
+            <span className="phone-avatar" aria-hidden="true">{(sender ?? BRAND.name).charAt(0).toUpperCase()}</span>
+            <p className="phone-from">{sender ?? BRAND.name}</p>
+          </div>
+          <div className="phone-body">
+            {template.trim() ? <p className="phone-bubble">{previewText}</p> : <p className="phone-empty">Your message will appear here.</p>}
+          </div>
         </div>
-        {first ? <p className="muted preview-note">Preview for {displayPhone(first.phone)}</p> : null}
+        {shown ? (
+          <div className="preview-nav">
+            <button type="button" aria-label="Previous customer" disabled={shownIndex === 0} onClick={() => setPreviewIndex(shownIndex - 1)}>←</button>
+            <p><b>{shown.fields.name || displayPhone(shown.phone)}</b><span>{shownIndex + 1} of {contactCount.toLocaleString()}</span></p>
+            <button type="button" aria-label="Next customer" disabled={shownIndex >= contactCount - 1} onClick={() => setPreviewIndex(shownIndex + 1)}>→</button>
+          </div>
+        ) : null}
       </aside>
 
       {confirming ? (

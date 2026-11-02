@@ -142,6 +142,16 @@ export function unknownFields(template: string, known: string[]): string[] {
 const GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM_EXTENDED = '^{}\\[~]|€\f';
 
+/** Swaps the look-alike characters Word and phones insert for ones that cost less to send. */
+export function plainText(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[\u00A0\u2009\u202F]/g, ' ');
+}
+
 export type Segments = { encoding: 'GSM' | 'Unicode'; length: number; segments: number; perSegment: number; culprits: string[] };
 
 /**
